@@ -13,7 +13,7 @@ All data stays in Safari on your phone (`localStorage`). Nothing is sent anywher
 
 1. Repo **Settings → Pages**.
 2. Source: **Deploy from a branch**, branch **main**, folder **/ (root)**, then **Save**.
-3. After about a minute it's live at **https://senthil-as.github.io/bar-tab/**.
+3. After about a minute it's live at **https://senthil-as.github.io/Bar-tab/**.
 
 Open that link in **Safari** on your iPhone. Use it in Safari, not "Add to Home Screen": iOS keeps home-screen web apps' data separate from Safari's, and the Shortcut opens Safari. Bookmark it, or add it to Favorites.
 
@@ -32,7 +32,7 @@ In the **Shortcuts** app:
 2. Add the action **URL Encode** and set its input to *Shortcut Input → Merchant*.
 3. Add **Text** containing:
    ```
-   https://senthil-as.github.io/bar-tab/?log=1&amount=[Shortcut Input → Amount]&merchant=[URL Encoded Text]
+   https://senthil-as.github.io/Bar-tab/?log=1&amount=[Shortcut Input → Amount]&merchant=[URL Encoded Text]
    ```
    (Insert the two bracketed values as variables. Tap the variable and pick *Amount*.)
 4. Add **Open URLs** with the Text as input.
@@ -40,7 +40,7 @@ In the **Shortcuts** app:
 6. **Morning recap** (added once per night):
    - **Find Reminders** where *Title is* `🍻 Bar Tab recap` and *Is Not Completed*.
    - **If** *Reminders* **does not have any value**:
-     - **Add New Reminder** titled `🍻 Bar Tab recap`, URL `https://senthil-as.github.io/bar-tab/?recap=1`, alert **tomorrow at 10:00am**.
+     - **Add New Reminder** titled `🍻 Bar Tab recap`, URL `https://senthil-as.github.io/Bar-tab/?recap=1`, alert **tomorrow at 10:00am**.
    - **End If**
 
 Now when you tap your phone at a bar, Safari pops up with *"What did you get?"*.
