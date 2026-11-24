@@ -30,6 +30,7 @@
     spendLimit: 100,
     waterEveryMin: 20,
     bankUrl: '',
+    theme: 'auto',
   };
 
   // ---------- storage ----------
@@ -150,7 +151,13 @@
   }
 
   function setNav(view) {
-    document.querySelectorAll('.top nav button').forEach(b => b.classList.toggle('active', b.dataset.go === view));
+    document.querySelectorAll('.tabbar button').forEach(b => b.classList.toggle('active', b.dataset.go === view));
+  }
+
+  function applyTheme() {
+    const t = state.settings.theme;
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+    else delete document.documentElement.dataset.theme;
   }
 
   function go(view, params) {
@@ -167,6 +174,27 @@
     if (t) { e.preventDefault(); go(t.dataset.go, t.dataset.night ? { night: t.dataset.night } : undefined); }
   });
 
+  const statusCls = p => (p >= 1 ? 'bad' : p >= 0.8 ? 'warn' : '');
+  const pageHead = (eyebrow, title, sub) => `
+    <header class="page">
+      ${eyebrow ? `<p class="eyebrow">${eyebrow}</p>` : ''}
+      <h1>${title}</h1>
+      ${sub ? `<p class="sub">${sub}</p>` : ''}
+    </header>`;
+
+  function ringHtml(pct, center, label) {
+    const r = 54, c = 2 * Math.PI * r;
+    const off = c * (1 - Math.min(1, Math.max(0, pct)));
+    return `<div class="ring ${statusCls(pct)}">
+      <svg viewBox="0 0 132 132" aria-hidden="true">
+        <circle class="track" cx="66" cy="66" r="${r}" fill="none" stroke-width="12"/>
+        <circle class="fill" cx="66" cy="66" r="${r}" fill="none" stroke-width="12" stroke-linecap="round"
+          stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${(pct > 0 ? off : c).toFixed(1)}"/>
+      </svg>
+      <div class="ring-center"><div class="big rounded num">${center}</div><div class="lbl">${label}</div></div>
+    </div>`;
+  }
+
   // ---------- views ----------
   function viewHome() {
     setNav('home');
@@ -174,36 +202,42 @@
     const s = summarize(key);
     const L = limitStatus(s);
     const { drinkLimit, spendLimit } = state.settings;
-    const meterCls = p => (p >= 1 ? 'bad' : p >= 0.8 ? 'warn' : '');
     const water = needsWater(s);
 
     $app.innerHTML = `
-      <h1>Tonight</h1>
-      <p class="muted small">${esc(nightLabel(key))}${s.bars.length ? ' · ' + s.bars.map(esc).join(', ') : ''}</p>
+      ${pageHead(esc(nightLabel(key)), 'Tonight', s.bars.length ? '📍 ' + s.bars.map(esc).join(', ') : '')}
 
+      ${L.over ? `<div class="banner bad">🛑 You're at your limit for tonight.</div>`
+        : L.near ? `<div class="banner warn">⚠️ Getting close to your limit.</div>` : ''}
       ${water ? `<div class="banner water">💧 Time for a glass of water.</div>` : ''}
-      ${L.near ? `<div class="banner warn">⚠️ You're close to your limit for tonight.</div>` : ''}
 
-      <div class="stats">
-        <div class="stat"><div class="num">${s.myCount}</div><div class="lbl">my drinks</div></div>
-        <div class="stat"><div class="num">${money(s.spentTotal)}</div><div class="lbl">spent</div></div>
-        <div class="stat"><div class="num">${s.water.length}</div><div class="lbl">waters</div></div>
+      <section class="card hero">
+        ${ringHtml(L.dPct, s.myCount, drinkLimit > 0 ? `of ${drinkLimit} drinks` : 'drinks')}
+        <div class="hero-side">
+          <div class="kv">
+            <span class="k">Spent</span>
+            <span class="v rounded num">${money(s.spentTotal)}</span>
+            ${spendLimit > 0 ? `<div class="meter ${statusCls(L.sPct)}"><div style="width:${Math.min(100, L.sPct * 100)}%"></div></div>
+              <span class="of">of ${money(spendLimit)}</span>` : ''}
+          </div>
+          <div class="kv">
+            <span class="k">Water</span>
+            <span class="v rounded num">💧 ${s.water.length}</span>
+          </div>
+        </div>
+      </section>
+
+      <div class="actions">
+        <button class="btn water" id="addWater">💧 Water</button>
+        <button class="btn" id="addManual">＋ Drink</button>
       </div>
-
-      <div class="card">
-        <div class="meter-row"><span>Drinks</span><span>${s.myCount} / ${drinkLimit}</span></div>
-        <div class="meter ${meterCls(L.dPct)}"><div style="width:${Math.min(100, L.dPct * 100)}%"></div></div>
-        <div class="meter-row" style="margin-top:10px"><span>Spend</span><span>${money(s.spentTotal)} / ${money(spendLimit)}</span></div>
-        <div class="meter ${meterCls(L.sPct)}"><div style="width:${Math.min(100, L.sPct * 100)}%"></div></div>
-      </div>
-
-      <button class="btn water" id="addWater">💧 I drank water</button>
-      <button class="btn" id="addManual">＋ Add a drink (cash / not tapped)</button>
 
       ${s.list.length ? `<h2>Tonight's log</h2><div class="card">${timelineHtml(s.list, true)}</div>` : `
-        <div class="card muted small">Nothing logged yet tonight. When you tap your card at a bar with Apple Pay,
-        your Shortcut opens this page and asks what you ordered.
-        Not set up yet? <a href="#" data-go="settings" style="color:var(--accent)">See setup</a>.</div>`}
+        <div class="card empty">
+          <div class="emo">🍸</div>
+          <p>Nothing logged yet. Tap your phone to pay at a bar and Bar Tab will ask what you ordered.</p>
+          <p class="small">Not set up yet? <a href="#" data-go="settings">See setup</a></p>
+        </div>`}
     `;
 
     document.getElementById('addWater').onclick = () => {
@@ -218,17 +252,17 @@
   }
 
   function timelineHtml(list, deletable) {
+    const del = e => (deletable ? `<button class="x" data-del="${e.id}" aria-label="Delete">×</button>` : '');
     return `<ul class="timeline">${list.map(e => {
       if (e.type === 'water') {
-        return `<li><span class="t">${timeOf(e.ts)}</span><span class="what">💧 Water</span>
-          ${deletable ? `<button class="x" data-del="${e.id}" aria-label="Delete">×</button>` : ''}</li>`;
+        return `<li><span class="ico water">💧</span>
+          <span class="what"><span class="name">Water</span><span class="meta">${timeOf(e.ts)}</span></span>${del(e)}</li>`;
       }
       const d = drinkById[e.drink] || drinkById.other;
-      return `<li><span class="t">${timeOf(e.ts)}</span>
-        <span class="what">${d.emo} ${esc(d.name)}${e.forWhom === 'friend' ? ' <span class="muted small">· for a friend</span>' : ''}
-        ${e.merchant ? `<br><span class="muted small">${esc(e.merchant)}</span>` : ''}</span>
-        <span class="amt">${e.cost ? money(e.cost) : ''}</span>
-        ${deletable ? `<button class="x" data-del="${e.id}" aria-label="Delete">×</button>` : ''}</li>`;
+      return `<li><span class="ico">${d.emo}</span>
+        <span class="what"><span class="name">${esc(d.name)}</span>${e.forWhom === 'friend' ? '<span class="tag">Friend</span>' : ''}
+          <span class="meta">${timeOf(e.ts)}${e.merchant ? ' · ' + esc(e.merchant) : ''}</span></span>
+        <span class="amt num">${e.cost ? money(e.cost) : ''}</span>${del(e)}</li>`;
     }).join('')}</ul>`;
   }
   function bindTimelineDeletes(rerender) {
@@ -243,7 +277,7 @@
 
   /** "What did you get?" — one card tap can be a whole round. */
   function viewLog({ merchant, amount, manual }) {
-    setNav('');
+    setNav(manual ? 'home' : '');
     const tapKey = `${merchant}|${amount}`;
     const dupe = !manual && state.recentTaps.find(t => t.key === tapKey && Date.now() - t.ts < 3 * 60e3);
     const items = []; // { drink, forWhom }
@@ -251,30 +285,38 @@
 
     function render() {
       const each = items.length ? total / items.length : 0;
+      const counts = {};
+      for (const it of items) counts[it.drink] = (counts[it.drink] || 0) + 1;
+
       $app.innerHTML = `
-        <h1>${manual ? 'Add a drink' : 'What did you get?'}</h1>
-        ${manual ? '' : `<p class="muted">${esc(merchant || 'Card tap')} · <strong style="color:var(--text)">${money(amount)}</strong></p>`}
-        ${dupe ? `<div class="banner warn">You already logged this tap a minute ago. Only save again if it was a new round.</div>` : ''}
+        ${pageHead(manual ? 'Cash or not tapped' : 'New tap', manual ? 'Add a drink' : 'What did you get?')}
 
         ${manual ? `
-          <label class="field"><span>Where?</span><input id="mMerchant" placeholder="Bar name (optional)" value="${esc(merchant)}"></label>
-          <label class="field"><span>Total cost</span><input id="mAmount" inputmode="decimal" placeholder="0.00" value="${total || ''}"></label>
-        ` : ''}
+          <div class="card">
+            <label class="field"><span>Where?</span><input id="mMerchant" placeholder="Bar name (optional)" value="${esc(merchant)}"></label>
+            <label class="field"><span>Total cost</span><input id="mAmount" inputmode="decimal" placeholder="0.00" value="${total || ''}"></label>
+          </div>` : `
+          <div class="card tap-summary">
+            <span class="where">📍 ${esc(merchant || 'Card tap')}</span>
+            <span class="amt rounded num">${money(amount)}</span>
+          </div>`}
+        ${dupe ? `<div class="banner warn">You already logged this tap. Only save again if it was a new round.</div>` : ''}
 
         <h2>Tap each drink in the round</h2>
         <div class="drink-grid">
-          ${DRINKS.map(d => `<button data-drink="${d.id}"><span class="emo">${d.emo}</span>${esc(d.name)}</button>`).join('')}
+          ${DRINKS.map(d => `<button data-drink="${d.id}" class="${counts[d.id] ? 'picked' : ''}">
+            ${counts[d.id] ? `<span class="badge">${counts[d.id] > 1 ? '×' + counts[d.id] : '✓'}</span>` : ''}
+            <span class="emo">${d.emo}</span>${esc(d.name)}</button>`).join('')}
         </div>
 
         ${items.length ? `
-          <h2>This round</h2>
+          <h2>Who's it for?</h2>
           <div class="card"><ul class="items">
             ${items.map((it, i) => {
               const d = drinkById[it.drink];
               return `<li>
-                <span class="name">${d.emo} ${esc(d.name)}</span>
-                ${total ? `<span class="cost">${money(each)}</span>` : ''}
-                <div class="seg" role="group">
+                <span class="name">${d.emo} ${esc(d.name)}${total ? `<span class="cost num">${money(each)}</span>` : ''}</span>
+                <div class="seg accent" role="group" aria-label="Who is it for">
                   <button data-who="me" data-i="${i}" class="${it.forWhom === 'me' ? 'on' : ''}">Me</button>
                   <button data-who="friend" data-i="${i}" class="${it.forWhom === 'friend' ? 'on' : ''}">Friend</button>
                 </div>
@@ -283,12 +325,14 @@
             }).join('')}
           </ul></div>` : ''}
 
-        <button class="btn primary" id="saveRound" ${items.length ? '' : 'disabled'}>
-          Save ${items.length ? `${items.length} drink${items.length > 1 ? 's' : ''}` : ''}
-        </button>
-        ${manual
-          ? `<button class="btn ghost" data-go="home">Cancel</button>`
-          : `<button class="btn ghost" id="notDrinks">Not drinks — ignore this tap</button>`}
+        <div class="sticky-bar">
+          <button class="btn primary" id="saveRound" ${items.length ? '' : 'disabled'}>
+            ${items.length ? `Save ${items.length} drink${items.length > 1 ? 's' : ''}` : 'Pick a drink above'}
+          </button>
+          ${manual
+            ? `<button class="btn ghost" data-go="home">Cancel</button>`
+            : `<button class="btn ghost" id="notDrinks">Not drinks — ignore this tap</button>`}
+        </div>
       `;
 
       $app.querySelectorAll('[data-drink]').forEach(b => b.onclick = () => {
@@ -346,7 +390,7 @@
       <div class="big">🛑</div>
       <h1>That's your limit</h1>
       <p class="muted">${esc(reason)}</p>
-      <p class="muted small" style="margin-top:14px">Past-you asked present-you to stop here. Lock your card so future-you doesn't have to argue about it.</p>
+      <p class="muted small" style="margin:14px 0 24px">Past-you asked present-you to stop here. Lock your card so future-you doesn't have to argue about it.</p>
       ${bankUrl
         ? `<a class="btn danger" href="${esc(bankUrl)}">🔒 Open my bank to lock my card</a>`
         : `<button class="btn danger" data-go="settings">🔒 Set up the "lock card" button</button>`}
@@ -367,7 +411,8 @@
     setNav('recap');
     const nights = [...new Set(state.entries.map(e => nightKey(e.ts)))].sort().reverse();
     if (!nights.length) {
-      $app.innerHTML = `<h1>Recap</h1><div class="card muted">No nights logged yet.</div>`;
+      $app.innerHTML = `${pageHead('', 'Recap')}
+        <div class="card empty"><div class="emo">🌙</div><p>No nights logged yet. Your morning-after summary will show up here.</p></div>`;
       return;
     }
     const key = nights.includes(requestedKey) ? requestedKey : nights[0];
@@ -377,33 +422,32 @@
     const waterRatio = s.myCount ? s.water.length / s.myCount : 0;
     const L = limitStatus(s);
 
-    const verdict = (() => {
-      if (!s.myCount) return '🌙 A dry night. Your liver says thanks.';
-      if (L.over) return '😬 You hit your limit. Easy day today — water, food, rest.';
-      if (waterRatio >= 0.5) return '👏 Nicely paced — you kept up with water.';
-      return '💧 Not much water last night. Hydrate this morning.';
+    const [vCls, verdict] = (() => {
+      if (!s.myCount) return ['water', '🌙 A dry night. Your liver says thanks.'];
+      if (L.over) return ['warn', '😬 You hit your limit. Easy day today — water, food, rest.'];
+      if (waterRatio >= 0.5) return ['water', '👏 Nicely paced — you kept up with water.'];
+      return ['water', '💧 Not much water last night. Hydrate this morning.'];
     })();
 
-    const breakdown = Object.entries(s.byDrink)
+    const chips = Object.entries(s.byDrink)
       .sort((a, b) => b[1] - a[1])
-      .map(([id, n]) => `${drinkById[id]?.emo || ''} ${n} ${esc(drinkById[id]?.name || id)}`)
-      .join(' · ');
+      .map(([id, n]) => `<span class="chip">${drinkById[id]?.emo || ''} ${n} ${esc(drinkById[id]?.name || id)}</span>`)
+      .join('');
 
     $app.innerHTML = `
-      <h1>${isTonight ? 'Tonight so far' : 'Good morning ☀️'}</h1>
-      <p class="muted">${esc(nightLabel(key))}${s.bars.length ? ' · ' + s.bars.map(esc).join(', ') : ''}</p>
+      ${pageHead(esc(nightLabel(key)), isTonight ? 'Tonight so far' : 'Good morning ☀️', s.bars.length ? '📍 ' + s.bars.map(esc).join(', ') : '')}
 
-      <div class="banner ${L.over ? 'warn' : 'water'}">${verdict}</div>
+      <div class="banner ${vCls} verdict">${verdict}</div>
 
       <div class="stats">
-        <div class="stat"><div class="num">${s.myCount}</div><div class="lbl">my drinks</div></div>
-        <div class="stat"><div class="num">${money(s.spentTotal)}</div><div class="lbl">total spent</div></div>
-        <div class="stat"><div class="num">${s.water.length}</div><div class="lbl">waters</div></div>
+        <div class="stat"><div class="num rounded">${s.myCount}</div><div class="lbl">my drinks</div></div>
+        <div class="stat"><div class="num rounded">${money(s.spentTotal)}</div><div class="lbl">spent</div></div>
+        <div class="stat"><div class="num rounded">${s.water.length}</div><div class="lbl">waters</div></div>
       </div>
 
       <div class="card">
-        <p>${breakdown || '<span class="muted">No alcoholic drinks for you.</span>'}</p>
-        <p class="muted small" style="margin-top:10px">
+        ${chips ? `<div class="breakdown">${chips}</div>` : '<p class="muted">No alcoholic drinks for you.</p>'}
+        <p class="muted small">
           ${money(s.spentMine)} on your drinks · ${money(s.spentFriends)} on ${s.friends.length} for friends
           ${hrs >= 0.25 ? ` · out for ${hrs < 1 ? Math.round(hrs * 60) + ' min' : hrs.toFixed(1) + ' hrs'}` : ''}
         </p>
@@ -417,7 +461,7 @@
           const ns = summarize(k);
           return `<button data-go="recap" data-night="${k}" class="${k === key ? 'on' : ''}">
             <span>${esc(nightLabel(k))}</span>
-            <span class="muted">${ns.myCount} 🍺 · ${money(ns.spentTotal)}</span></button>`;
+            <span class="muted num">${ns.myCount} 🍺 · ${money(ns.spentTotal)}</span></button>`;
         }).join('')}</div>` : ''}
     `;
   }
@@ -428,10 +472,21 @@
     const base = location.origin + location.pathname;
     const currencies = ['USD', 'GBP', 'EUR', 'CAD', 'AUD', 'NZD', 'INR', 'SGD', 'AED', 'CHF', 'JPY'];
     if (!currencies.includes(st.currency)) currencies.unshift(st.currency);
+    const theme = st.theme || 'auto';
 
     $app.innerHTML = `
-      <h1>Settings</h1>
+      ${pageHead('', 'Settings')}
 
+      <h2>Appearance</h2>
+      <div class="card">
+        <div class="seg full" role="group" aria-label="Theme">
+          ${[['auto', 'Auto'], ['light', 'Light'], ['dark', 'Dark']].map(([v, l]) =>
+            `<button data-theme-opt="${v}" class="${theme === v ? 'on' : ''}">${l}</button>`).join('')}
+        </div>
+        <p class="muted small" style="margin-top:10px">Auto follows your iPhone's light/dark setting.</p>
+      </div>
+
+      <h2>Limits</h2>
       <div class="card">
         <label class="field"><span>Drink limit per night (your drinks only)</span>
           <input id="sDrinks" type="number" min="0" inputmode="numeric" value="${st.drinkLimit}"></label>
@@ -441,10 +496,9 @@
           <input id="sWater" type="number" min="5" inputmode="numeric" value="${st.waterEveryMin}"></label>
         <label class="field"><span>Currency</span>
           <select id="sCur">${currencies.map(c => `<option ${c === st.currency ? 'selected' : ''}>${c}</option>`).join('')}</select></label>
-        <label class="field"><span>"Lock my card" link — your bank app or its card-controls web page</span>
-          <input id="sBank" type="url" placeholder="https://… (your bank's card-lock page)" value="${esc(st.bankUrl)}"></label>
-        <p class="muted small">Tip: most banks have a "freeze/lock card" toggle in their app. Paste your bank's website or app link here so the limit screen opens it in one tap.</p>
-        <button class="btn primary" id="saveSettings">Save settings</button>
+        <label class="field"><span>"Lock my card" link: your bank's app or card-controls page</span>
+          <input id="sBank" type="url" placeholder="https://…" value="${esc(st.bankUrl)}"></label>
+        <button class="btn primary" id="saveSettings">Save</button>
       </div>
 
       <h2>iPhone Shortcut setup</h2>
@@ -460,7 +514,7 @@
           <li><em>Water reminder:</em> add <strong>Add New Reminder</strong> → "💧 Drink some water", alert at <em>Adjust Date: Current Date + 20 minutes</em>.</li>
           <li><em>Morning recap:</em> add <strong>Find Reminders</strong> where Title is "🍻 Bar Tab recap" and Is Not Completed. Add <strong>If</strong> <em>Reminders</em> <strong>does not have any value</strong> → <strong>Add New Reminder</strong> "🍻 Bar Tab recap", URL <code>${esc(base)}?recap=1</code>, alert tomorrow at 10:00am.</li>
         </ol>
-        <p class="muted">Keep using this page in <strong>Safari</strong> (not "Add to Home Screen") so the Shortcut and you see the same data.</p>
+        <p class="muted">Keep using this page in <strong>Safari</strong>. For a Home Screen icon, make a Shortcut that opens this page and add that to your Home Screen.</p>
         <a class="btn" href="${esc(base)}?log=1&merchant=Test%20Bar&amount=%2414.00">Try a test tap</a>
       </div>
 
@@ -474,10 +528,14 @@
       </div>
     `;
 
+    $app.querySelectorAll('[data-theme-opt]').forEach(b => b.onclick = () => {
+      state.settings = { ...state.settings, theme: b.dataset.themeOpt };
+      save(); applyTheme(); viewSettings();
+    });
     document.getElementById('saveSettings').onclick = () => {
       const num = (id, d) => { const n = parseFloat(document.getElementById(id).value); return Number.isFinite(n) && n >= 0 ? n : d; };
       state.settings = {
-        ...st,
+        ...state.settings,
         drinkLimit: num('sDrinks', st.drinkLimit),
         spendLimit: num('sSpend', st.spendLimit),
         waterEveryMin: Math.max(5, num('sWater', st.waterEveryMin)),
@@ -522,5 +580,6 @@
     if (!document.hidden && !new URLSearchParams(location.search).toString()) viewHome();
   });
 
+  applyTheme();
   route();
 })();
